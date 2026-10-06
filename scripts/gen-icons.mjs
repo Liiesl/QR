@@ -109,8 +109,37 @@ function drawIcon(size, { maskable = false } = {}) {
   return encodePNG(size, size, buf);
 }
 
+function encodeICO(images) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+  let offset = 6 + 16 * images.length;
+  const parts = [header];
+  const payloads = [];
+  for (const { size, data } of images) {
+    const entry = Buffer.alloc(16);
+    entry[0] = size >= 256 ? 0 : size;
+    entry[1] = size >= 256 ? 0 : size;
+    entry[2] = 0; entry[3] = 0;
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(data.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += data.length;
+    parts.push(entry);
+    payloads.push(data);
+  }
+  return Buffer.concat([...parts, ...payloads]);
+}
+
 writeFileSync(join(outDir, 'pwa-192x192.png'), drawIcon(192));
 writeFileSync(join(outDir, 'pwa-512x512.png'), drawIcon(512));
 writeFileSync(join(outDir, 'maskable-512x512.png'), drawIcon(512, { maskable: true }));
 writeFileSync(join(outDir, 'apple-touch-icon.png'), drawIcon(180));
+writeFileSync(join(outDir, 'favicon.ico'), encodeICO([
+  { size: 16, data: drawIcon(16) },
+  { size: 32, data: drawIcon(32) },
+  { size: 48, data: drawIcon(48) },
+]));
 console.log('icons written to public/');
