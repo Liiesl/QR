@@ -2,11 +2,12 @@
 import Icon from './icons/Icon.astro';
 ---
 
-<section id="historyPanel" class="md-history" hidden aria-label="Recent scans">
+<section id="historyPanel" class="md-history" hidden aria-label="Scan history">
   <div class="md-history-header">
     <div class="md-history-title">
       <Icon name="history" size={20} />
-      <h2>Recent scans</h2>
+      <h2>History</h2>
+      <span id="historyCount" class="md-history-count">0</span>
     </div>
     <div class="md-history-tools">
       <button id="clearBtn" class="md-button md-button-text" type="button">
@@ -18,9 +19,37 @@ import Icon from './icons/Icon.astro';
       </button>
     </div>
   </div>
+  <div class="md-history-search">
+    <label class="md-search-bar" for="historySearch">
+      <Icon name="search" size={20} />
+      <input
+        id="historySearch"
+        type="search"
+        placeholder="Search scans"
+        autocomplete="off"
+        enterkeyhint="search"
+      />
+      <button id="historySearchClear" class="md-icon-button md-icon-button-sm" type="button" hidden aria-label="Clear search">
+        <Icon name="close" size={18} />
+      </button>
+    </label>
+    <div class="md-chips" role="group" aria-label="Filter scans">
+      <button class="md-chip" type="button" data-filter="all" data-active="true" aria-pressed="true">All</button>
+      <button class="md-chip" type="button" data-filter="links" data-active="false" aria-pressed="false">
+        <Icon name="link" size={16} />
+        <span>Links</span>
+      </button>
+      <button class="md-chip" type="button" data-filter="text" data-active="false" aria-pressed="false">Text</button>
+    </div>
+  </div>
   <ul id="historyList" class="md-history-list"></ul>
   <div id="historyEmpty" class="md-history-empty">
     <Icon name="image" size={28} />
     <p>No scans yet. Codes you scan will appear here.</p>
+  </div>
+  <div id="historyNoResults" class="md-history-empty" hidden>
+    <Icon name="search" size={28} />
+    <p>No matches. Try a different search or filter.</p>
+    <button id="historyResetSearch" class="md-button md-button-tonal" type="button">Clear search</button>
   </div>
 </section>

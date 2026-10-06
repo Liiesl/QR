@@ -2,6 +2,7 @@
 import '../styles/tokens.css';
 import '../styles/material.css';
 import '../styles/global.css';
+import ResultSheet from '../components/ResultSheet.astro';
 import { pwaInfo } from 'virtual:pwa-info';
 
 interface Props {
@@ -37,5 +38,7 @@ const {
     <div class="md-wrap">
       <slot />
     </div>
+    <ResultSheet />
+    <script src="/src/scripts/result-sheet.ts"></script>
   </body>
 </html>

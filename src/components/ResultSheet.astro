@@ -2,8 +2,20 @@
 import Icon from './icons/Icon.astro';
 ---
 
-<section id="result" class="md-sheet" hidden aria-live="polite" aria-label="Scan result">
-  <div class="md-sheet-handle" aria-hidden="true"></div>
+<div id="scrim" class="md-scrim" hidden></div>
+
+<section
+  id="result"
+  class="md-sheet md-sheet-global"
+  hidden
+  role="dialog"
+  aria-modal="true"
+  aria-live="polite"
+  aria-label="Scan result"
+>
+  <button id="sheetDrag" class="md-sheet-drag" type="button" aria-expanded="false" aria-label="Expand result">
+    <span class="md-sheet-handle" aria-hidden="true"></span>
+  </button>
   <div class="md-sheet-header">
     <span class="md-assist-chip">
       <Icon name="qr_code" size={16} />
@@ -14,6 +26,7 @@ import Icon from './icons/Icon.astro';
     </button>
   </div>
   <code id="resultText" class="md-sheet-text"></code>
+  <p id="resultMeta" class="md-sheet-meta">Saved to history</p>
   <div class="md-sheet-actions">
     <a id="openBtn" class="md-button md-button-filled" href="#" target="_blank" rel="noopener">
       <Icon name="open_in_new" size={18} />

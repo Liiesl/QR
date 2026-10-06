@@ -14,6 +14,8 @@ export type IconName =
   | 'install'
   | 'image'
   | 'check'
+  | 'search'
+  | 'link'
   | 'videocam_off';
 
 export const ICON_NAMES: IconName[] = [
@@ -32,5 +34,7 @@ export const ICON_NAMES: IconName[] = [
   'install',
   'image',
   'check',
+  'search',
+  'link',
   'videocam_off'
 ];

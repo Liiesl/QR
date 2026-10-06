@@ -1,7 +1,8 @@
 import jsQR from 'jsqr';
 import { createDetector, formatLabel } from '../lib/detector.ts';
-import { clearHistory, isURL, loadHistory, saveHistory } from '../lib/history.ts';
-import type { BarcodeDetectorLike } from '../lib/types.ts';
+import { clearHistory, deleteHistoryItem, isURL, loadHistory, relativeTime } from '../lib/history.ts';
+import { QR_HISTORY_CHANGED_EVENT, emitQRResult } from '../lib/result-bus.ts';
+import type { BarcodeDetectorLike, HistoryItem } from '../lib/types.ts';
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -21,21 +22,19 @@ const idleHint = el('idleHint');
 const torchBtn = el<HTMLButtonElement>('torchBtn');
 const flipBtn = el<HTMLButtonElement>('flipBtn');
 const fileInput = el<HTMLInputElement>('fileInput');
-const result = el('result');
-const resultKind = el('resultKind');
-const resultText = el('resultText');
-const openBtn = el<HTMLAnchorElement>('openBtn');
-const copyBtn = el<HTMLButtonElement>('copyBtn');
-const shareBtn = el<HTMLButtonElement>('shareBtn');
 const historyList = el('historyList');
 const historyEmpty = el('historyEmpty');
+const historyNoResults = el('historyNoResults');
 const historyPanel = el('historyPanel');
 const historyBtn = el<HTMLButtonElement>('historyBtn');
 const scanBtn = el<HTMLButtonElement>('scanBtn');
 const uploadBtn = el('uploadBtn');
 const historyClose = el<HTMLButtonElement>('historyClose');
-const resultClose = el<HTMLButtonElement>('resultClose');
 const clearBtn = el<HTMLButtonElement>('clearBtn');
+const historySearch = el<HTMLInputElement>('historySearch');
+const historySearchClear = el<HTMLButtonElement>('historySearchClear');
+const historyResetSearch = el<HTMLButtonElement>('historyResetSearch');
+const historyCount = el('historyCount');
 const installBtn = el<HTMLButtonElement>('installBtn');
 
 let stream: MediaStream | null = null;
@@ -48,9 +47,18 @@ let torchOn = false;
 let lastValue = '';
 let deferredPrompt: { prompt: () => void; userChoice?: Promise<unknown> } | null = null;
 
+let historyQuery = '';
+let historyFilter: 'all' | 'links' | 'text' = 'all';
+
 const SVG_ATTRS =
   'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20"';
 const QR_SVG = `<svg ${SVG_ATTRS}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14h1M14 20h1M18 18h3v3h-3z"/></svg>`;
+const LINK_SVG = `<svg ${SVG_ATTRS}><path d="M10 14a4.2 4.2 0 0 0 6 0l3-3a4.24 4.24 0 0 0-6-6l-1.5 1.5"/><path d="M14 10a4.2 4.2 0 0 0-6 0l-3 3a4.24 4.24 0 0 0 6 6l1.5-1.5"/></svg>`;
+const IMAGE_SVG = `<svg ${SVG_ATTRS}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 18 10 12.5l3.5 3.5 2.5-2.5 3.5 3.5"/></svg>`;
+const OPEN_SVG = `<svg ${SVG_ATTRS}><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 13.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5.5"/></svg>`;
+const COPY_SVG = `<svg ${SVG_ATTRS}><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
+const DELETE_SVG = `<svg ${SVG_ATTRS}><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l1 13a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1l1-13"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+const CHECK_SVG = `<svg ${SVG_ATTRS}><path d="M4.5 12.5 10 18 19.5 6.5"/></svg>`;
 
 function setStatus(msg: string, _live?: boolean): void {
   // No status bar in the UI — mirror to the empty-state hint while it is visible.
@@ -79,27 +87,46 @@ function setNavActive(name: 'scan' | 'upload' | 'history'): void {
   }
 }
 
-function setActionLabel(btn: HTMLElement, text: string): void {
-  const inner = btn.querySelector('[data-label]');
-  if (inner) inner.textContent = text;
-  else btn.textContent = text;
+function itemIcon(item: HistoryItem): string {
+  if (item.kind === 'IMAGE') return IMAGE_SVG;
+  return isURL(item.text) ? LINK_SVG : QR_SVG;
+}
+
+function matchesFilter(item: HistoryItem): boolean {
+  if (historyFilter === 'links') return isURL(item.text);
+  if (historyFilter === 'text') return !isURL(item.text);
+  return true;
 }
 
 function renderHistory(): void {
-  const items = loadHistory();
+  const all = loadHistory();
+  historyCount.textContent = String(all.length);
+  clearBtn.toggleAttribute('disabled', all.length === 0);
+
+  const q = historyQuery.trim().toLowerCase();
+  const items = all.filter((i) => matchesFilter(i) && (!q || i.text.toLowerCase().includes(q)));
+
   historyList.innerHTML = '';
-  (historyEmpty as HTMLElement).style.display = items.length ? 'none' : 'flex';
+  const hasHistory = all.length > 0;
+  historyEmpty.hidden = hasHistory;
+  (historyEmpty as HTMLElement).style.display = hasHistory ? 'none' : 'flex';
+  historyNoResults.hidden = hasHistory && items.length > 0;
+  (historyNoResults as HTMLElement).style.display = hasHistory && items.length === 0 ? 'flex' : 'none';
+
   for (const item of items.slice(0, 20)) {
     const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'md-history-item';
-    b.title = new Date(item.time).toLocaleString();
+    li.className = 'md-history-row';
+
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'md-history-item';
+    open.title = new Date(item.time).toLocaleString();
+    open.setAttribute('aria-label', `Open result: ${item.text.slice(0, 80)}`);
 
     const icon = document.createElement('span');
     icon.className = 'md-history-item-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML = QR_SVG;
+    icon.innerHTML = itemIcon(item);
 
     const wrap = document.createElement('span');
     wrap.className = 'md-history-item-text';
@@ -108,34 +135,82 @@ function renderHistory(): void {
     primary.textContent = item.text;
     const secondary = document.createElement('span');
     secondary.className = 'md-history-item-secondary';
-    secondary.textContent = `${item.kind || 'QR CODE'} · ${new Date(item.time).toLocaleString()}`;
+    secondary.textContent = `${item.kind || 'QR CODE'} · ${relativeTime(item.time)}`;
 
     wrap.appendChild(primary);
     wrap.appendChild(secondary);
-    b.appendChild(icon);
-    b.appendChild(wrap);
-    b.addEventListener('click', () => showResult(item.text, item.kind || 'QR CODE', true));
-    li.appendChild(b);
+    open.appendChild(icon);
+    open.appendChild(wrap);
+    open.addEventListener('click', () => {
+      emitQRResult({ text: item.text, kind: item.kind || 'QR CODE', fromHistory: true });
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'md-history-item-actions';
+
+    if (isURL(item.text)) {
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'md-icon-button md-icon-button-sm';
+      go.innerHTML = OPEN_SVG;
+      go.setAttribute('aria-label', `Open link: ${item.text.slice(0, 60)}`);
+      go.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(item.text, '_blank', 'noopener');
+      });
+      actions.appendChild(go);
+    }
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'md-icon-button md-icon-button-sm';
+    copy.innerHTML = COPY_SVG;
+    copy.setAttribute('aria-label', 'Copy to clipboard');
+    copy.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const original = copy.innerHTML;
+      navigator.clipboard
+        ?.writeText(item.text)
+        .then(() => {
+          copy.innerHTML = CHECK_SVG;
+          copy.classList.add('is-copied');
+          window.setTimeout(() => {
+            copy.innerHTML = original;
+            copy.classList.remove('is-copied');
+          }, 1000);
+        })
+        .catch(() => {});
+    });
+    actions.appendChild(copy);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'md-icon-button md-icon-button-sm';
+    del.innerHTML = DELETE_SVG;
+    del.setAttribute('aria-label', 'Delete this scan');
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteHistoryItem(item.text);
+      renderHistory();
+    });
+    actions.appendChild(del);
+
+    li.appendChild(open);
+    li.appendChild(actions);
     historyList.appendChild(li);
   }
 }
 
-function showResult(text: string, kind = 'QR CODE', fromHistory = false): void {
-  result.hidden = false;
-  resultKind.textContent = kind;
-  resultText.textContent = text;
-  const url = isURL(text);
-  openBtn.style.display = url ? '' : 'none';
-  if (url) openBtn.href = text;
-  if (!fromHistory) {
-    saveHistory(text, kind);
-    renderHistory();
-    try {
-      navigator.vibrate?.(120);
-    } catch {
-      // ignore
-    }
-  }
+/** New scans go through the global floating sheet (Layout-owned). */
+function announceResult(text: string, kind = 'QR CODE'): void {
+  emitQRResult({ text, kind, fromHistory: false });
+  setStatus('Found — keep scanning', true);
+}
+
+function hideGlobalResult(): void {
+  document.getElementById('result')?.setAttribute('hidden', '');
+  document.getElementById('scrim')?.setAttribute('hidden', '');
+  document.body.classList.remove('md-sheet-open');
 }
 
 async function detectFrame(now: number): Promise<void> {
@@ -152,8 +227,7 @@ async function detectFrame(now: number): Promise<void> {
         const v = codes[0].rawValue;
         if (v && v !== lastValue) {
           lastValue = v;
-          showResult(v, formatLabel(codes[0].format || 'qr_code'));
-          setStatus('Found — keep scanning', true);
+          announceResult(v, formatLabel(codes[0].format || 'qr_code'));
           window.setTimeout(() => {
             lastValue = '';
           }, 2500);
@@ -175,8 +249,7 @@ async function detectFrame(now: number): Promise<void> {
   const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
   if (code?.data && code.data !== lastValue) {
     lastValue = code.data;
-    showResult(code.data, 'QR CODE');
-    setStatus('Found — keep scanning', true);
+    announceResult(code.data, 'QR CODE');
     window.setTimeout(() => {
       lastValue = '';
     }, 2500);
@@ -295,7 +368,7 @@ fileInput.addEventListener('change', () => {
         try {
           const codes = await native.detect(canvas);
           if (codes.length > 0 && codes[0].rawValue) {
-            showResult(codes[0].rawValue, 'IMAGE');
+            announceResult(codes[0].rawValue, 'IMAGE');
             setStatus('Decoded from image — resuming live scan');
             fileInput.value = '';
             resumeLive();
@@ -308,7 +381,7 @@ fileInput.addEventListener('change', () => {
       const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(img.data, img.width, img.height);
       if (code?.data) {
-        showResult(code.data, 'IMAGE');
+        announceResult(code.data, 'IMAGE');
         setStatus('Decoded from image — resuming live scan');
       } else {
         setStatus('No QR found in that image — resuming live scan');
@@ -323,40 +396,59 @@ fileInput.addEventListener('change', () => {
     });
 });
 
-copyBtn.addEventListener('click', () => {
-  navigator.clipboard
-    .writeText(resultText.textContent ?? '')
-    .then(() => {
-      setActionLabel(copyBtn, 'Copied');
-      window.setTimeout(() => {
-        setActionLabel(copyBtn, 'Copy');
-      }, 1200);
-    })
-    .catch(() => {
-      setActionLabel(copyBtn, 'Failed');
-    });
+clearBtn.addEventListener('click', () => {
+  if (loadHistory().length === 0) return;
+  if (!window.confirm('Delete all scan history?')) return;
+  clearHistory();
+  renderHistory();
 });
 
-shareBtn.addEventListener('click', () => {
-  const text = resultText.textContent ?? '';
-  if (navigator.share) {
-    navigator.share({ text }).catch(() => {});
-  } else {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setActionLabel(shareBtn, 'Copied');
-        window.setTimeout(() => {
-          setActionLabel(shareBtn, 'Share');
-        }, 1200);
-      })
-      .catch(() => {});
+function setFilter(next: typeof historyFilter): void {
+  historyFilter = next;
+  for (const chip of document.querySelectorAll<HTMLButtonElement>('.md-chip[data-filter]')) {
+    const active = chip.dataset.filter === next;
+    chip.setAttribute('data-active', String(active));
+    chip.setAttribute('aria-pressed', String(active));
+  }
+  renderHistory();
+}
+
+for (const chip of document.querySelectorAll<HTMLButtonElement>('.md-chip[data-filter]')) {
+  chip.addEventListener('click', () => {
+    const f = chip.dataset.filter;
+    if (f === 'links' || f === 'text' || f === 'all') setFilter(f);
+  });
+}
+
+historySearch.addEventListener('input', () => {
+  historyQuery = historySearch.value;
+  historySearchClear.hidden = historyQuery.length === 0;
+  renderHistory();
+});
+
+historySearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    historySearch.value = '';
+    historyQuery = '';
+    historySearchClear.hidden = true;
+    renderHistory();
+    historySearch.blur();
   }
 });
 
-clearBtn.addEventListener('click', () => {
-  clearHistory();
+historySearchClear.addEventListener('click', () => {
+  historySearch.value = '';
+  historyQuery = '';
+  historySearchClear.hidden = true;
   renderHistory();
+  historySearch.focus();
+});
+
+historyResetSearch.addEventListener('click', () => {
+  historySearch.value = '';
+  historyQuery = '';
+  historySearchClear.hidden = true;
+  setFilter('all');
 });
 
 historyBtn.addEventListener('click', () => {
@@ -372,13 +464,9 @@ historyClose.addEventListener('click', () => {
 
 scanBtn.addEventListener('click', () => {
   historyPanel.hidden = true;
-  result.hidden = true;
+  hideGlobalResult();
   setNavActive('scan');
   resumeLive();
-});
-
-resultClose.addEventListener('click', () => {
-  result.hidden = true;
 });
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -403,6 +491,9 @@ document.addEventListener('visibilitychange', () => {
     void startCamera();
   }
 });
+
+// Saves happen in the global sheet owner — re-render whenever it reports one.
+window.addEventListener(QR_HISTORY_CHANGED_EVENT, renderHistory);
 
 renderHistory();
 if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
