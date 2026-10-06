@@ -2,6 +2,7 @@
 import '../styles/tokens.css';
 import '../styles/material.css';
 import '../styles/global.css';
+import { pwaInfo } from 'virtual:pwa-info';
 
 interface Props {
   title?: string;
@@ -29,6 +30,8 @@ const {
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    <script src="/src/pwa.ts"></script>
+    {pwaInfo && <Fragment set:html={pwaInfo.webManifest.linkTag} />}
   </head>
   <body>
     <div class="md-wrap">
