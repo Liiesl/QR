@@ -1,7 +1,9 @@
 import jsQR from 'jsqr';
 import { createDetector, formatLabel } from '../lib/detector.ts';
-import { clearHistory, deleteHistoryItem, isURL, loadHistory, relativeTime } from '../lib/history.ts';
+import { saveHistory, clearHistory, deleteHistoryItem, isURL, loadHistory, relativeTime } from '../lib/history.ts';
 import { QR_HISTORY_CHANGED_EVENT, emitQRResult } from '../lib/result-bus.ts';
+import { decodeImageBlob } from '../lib/decode-image.ts';
+import { consumePendingShare } from '../lib/share-store.ts';
 import type { BarcodeDetectorLike, HistoryItem } from '../lib/types.ts';
 
 function el<T extends HTMLElement>(id: string): T {
@@ -358,30 +360,10 @@ fileInput.addEventListener('change', () => {
   }
   if (scanning) void stopCamera();
   setStatus('Decoding image…');
-  createImageBitmap(file)
-    .then(async (bitmap) => {
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      ctx.drawImage(bitmap, 0, 0);
-      const native = await createDetector();
-      if (native) {
-        try {
-          const codes = await native.detect(canvas);
-          if (codes.length > 0 && codes[0].rawValue) {
-            announceResult(codes[0].rawValue, 'IMAGE');
-            setStatus('Decoded from image — resuming live scan');
-            fileInput.value = '';
-            resumeLive();
-            return;
-          }
-        } catch {
-          // fall through
-        }
-      }
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(img.data, img.width, img.height);
-      if (code?.data) {
-        announceResult(code.data, 'IMAGE');
+  decodeImageBlob(file)
+    .then((decoded) => {
+      if (decoded) {
+        announceResult(decoded.text, 'IMAGE');
         setStatus('Decoded from image — resuming live scan');
       } else {
         setStatus('No QR found in that image — resuming live scan');
@@ -395,6 +377,76 @@ fileInput.addEventListener('change', () => {
       resumeLive();
     });
 });
+
+async function handleSharedTarget(): Promise<boolean> {
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(window.location.search);
+  } catch {
+    return false;
+  }
+  if (!params.has('shared')) return false;
+  params.delete('shared');
+  try {
+    const clean = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+    window.history.replaceState(null, '', clean);
+  } catch {
+    // ignore
+  }
+  if (scanning) await stopCamera();
+  setNavActive('scan');
+  historyPanel.hidden = true;
+  setStatus('Opening shared image…');
+  const pending = await consumePendingShare();
+  if (!pending) {
+    setStatus('No shared image found — starting live scan');
+    resumeLive();
+    return true;
+  }
+  // Shared text/URL without files (e.g. link shared from browser).
+  if (pending.files.length === 0) {
+    const sharedText = pending.url || pending.text || pending.title;
+    if (sharedText) {
+      announceResult(sharedText, 'SHARED');
+      setStatus('Shared text received — resuming live scan');
+    } else {
+      setStatus('No shared image found — starting live scan');
+    }
+    resumeLive();
+    return true;
+  }
+  setStatus(`Decoding shared image${pending.files.length > 1 ? ` 1/${pending.files.length}` : ''}…`);
+  const found: Array<{ text: string; kind: string }> = [];
+  for (const file of pending.files.slice(0, 10)) {
+    try {
+      const decoded = await decodeImageBlob(file);
+      if (decoded) found.push({ text: decoded.text, kind: 'IMAGE' });
+    } catch {
+      // try next file
+    }
+  }
+  if (found.length > 0) {
+    // Save extras silently; announce the first so the sheet shows it.
+    for (let i = found.length - 1; i >= 1; i--) {
+      try {
+        saveHistory(found[i].text, found[i].kind);
+      } catch {
+        // ignore
+      }
+    }
+    if (found.length > 1) renderHistory();
+    announceResult(found[0].text, found[0].kind);
+    setStatus(
+      found.length > 1
+        ? `Decoded ${found.length} images — resuming live scan`
+        : 'Decoded shared image — resuming live scan'
+    );
+  } else {
+    setStatus('No QR found in shared image — resuming live scan');
+  }
+  resumeLive();
+  return true;
+}
 
 clearBtn.addEventListener('click', () => {
   if (loadHistory().length === 0) return;
@@ -497,9 +549,15 @@ window.addEventListener(QR_HISTORY_CHANGED_EVENT, renderHistory);
 
 renderHistory();
 if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
-  setStatus('This browser has no camera API — use Upload instead');
+  // No camera — still honor an incoming share (image decode needs no camera).
   idleHint.textContent = 'No camera API — use Upload instead.';
   retryBtn.hidden = true;
+  setStatus('This browser has no camera API — use Upload instead');
+  void handleSharedTarget();
+} else if (new URLSearchParams(window.location.search).has('shared')) {
+  void handleSharedTarget().then((handled) => {
+    if (!handled) void startCamera();
+  });
 } else {
   void startCamera();
 }
