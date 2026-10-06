@@ -1,0 +1,31 @@
+---
+import Icon from './icons/Icon.astro';
+---
+
+<section id="result" class="md-sheet" hidden aria-live="polite" aria-label="Scan result">
+  <div class="md-sheet-handle" aria-hidden="true"></div>
+  <div class="md-sheet-header">
+    <span class="md-assist-chip">
+      <Icon name="qr_code" size={16} />
+      <span id="resultKind">QR CODE</span>
+    </span>
+    <button id="resultClose" class="md-icon-button" type="button" aria-label="Dismiss result">
+      <Icon name="close" size={20} />
+    </button>
+  </div>
+  <code id="resultText" class="md-sheet-text"></code>
+  <div class="md-sheet-actions">
+    <a id="openBtn" class="md-button md-button-filled" href="#" target="_blank" rel="noopener">
+      <Icon name="open_in_new" size={18} />
+      <span>Open</span>
+    </a>
+    <button id="copyBtn" class="md-button md-button-tonal" type="button">
+      <Icon name="copy" size={18} />
+      <span data-label>Copy</span>
+    </button>
+    <button id="shareBtn" class="md-button md-button-outlined" type="button">
+      <Icon name="share" size={18} />
+      <span data-label>Share</span>
+    </button>
+  </div>
+</section>

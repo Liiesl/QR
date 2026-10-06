@@ -1,0 +1,23 @@
+---
+import TopAppBar from './TopAppBar.astro';
+import Viewfinder from './Viewfinder.astro';
+import ResultSheet from './ResultSheet.astro';
+import HistoryPanel from './HistoryPanel.astro';
+import ControlBar from './ControlBar.astro';
+---
+
+<TopAppBar />
+
+<main class="md-app">
+  <div class="md-stage-wrap">
+    <Viewfinder />
+    <ResultSheet />
+    <HistoryPanel />
+  </div>
+
+  <ControlBar />
+</main>
+
+<canvas id="canvas" hidden></canvas>
+
+<script src="../scripts/scanner.ts"></script>

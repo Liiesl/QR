@@ -1,0 +1,23 @@
+{
+  "name": "qr",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev --host",
+    "build": "astro build",
+    "preview": "astro preview --host",
+    "astro": "astro",
+    "gen-icons": "node ./scripts/gen-icons.mjs"
+  },
+  "dependencies": {
+    "@vite-pwa/astro": "^1.2.0",
+    "astro": "^7.3.6",
+    "jsqr": "^1.4.0"
+  },
+  "allowScripts": {
+    "esbuild": true
+  }
+}

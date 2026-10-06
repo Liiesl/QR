@@ -1,0 +1,52 @@
+/* Base layout only — colors/type/components live in tokens.css / material.css. */
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--md-sys-typescale-font);
+  -webkit-tap-highlight-color: transparent;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+.md-wrap {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+}
+
+.md-app {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-stage-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-stage-wrap > .md-viewfinder {
+  flex: 1 1 auto;
+  min-height: 0;
+}

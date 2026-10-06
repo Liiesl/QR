@@ -1,0 +1,24 @@
+---
+import Icon from './icons/Icon.astro';
+---
+
+<header class="md-top-app-bar">
+  <div class="md-top-app-bar-leading">
+    <span class="md-app-icon" aria-hidden="true">
+      <Icon name="qr_code_scanner" size={22} />
+    </span>
+<h1 class="md-top-app-bar-title">QR</h1>
+  </div>
+  <div class="md-top-app-bar-trailing">
+    <button id="torchBtn" class="md-icon-button md-icon-button-standard" type="button" disabled aria-pressed="false" aria-label="Toggle torch">
+      <span data-icon-off><Icon name="flash_off" size={22} /></span>
+      <span data-icon-on hidden><Icon name="flash_on" size={22} /></span>
+    </button>
+    <button id="flipBtn" class="md-icon-button md-icon-button-standard" type="button" disabled aria-label="Flip camera">
+      <Icon name="cameraswitch" size={22} />
+    </button>
+    <button id="installBtn" class="md-icon-button md-icon-button-standard" type="button" hidden aria-label="Install app">
+      <Icon name="install" size={22} />
+    </button>
+  </div>
+</header>

@@ -1,0 +1,30 @@
+---
+import Icon from './icons/Icon.astro';
+---
+
+<div id="stage" class="md-viewfinder">
+  <video id="video" playsinline muted disablepictureinpicture></video>
+
+  <div id="idle" class="md-empty-state">
+    <span class="md-empty-icon" aria-hidden="true">
+      <Icon name="qr_code_scanner" size={40} />
+    </span>
+    <h2 class="md-empty-title">Point at a code</h2>
+    <p class="md-empty-body">Scanning starts automatically. Nothing leaves this device.</p>
+    <p id="idleHint" class="md-empty-hint">Starting camera&hellip;</p>
+    <p class="md-empty-actions">
+      <button id="retryBtn" class="md-button md-button-filled" type="button" hidden>
+        <Icon name="videocam_off" size={18} />
+        <span>Enable camera</span>
+      </button>
+    </p>
+  </div>
+
+  <div class="md-viewfinder-frame" aria-hidden="true">
+    <div class="md-viewfinder-box">
+      <span class="md-corner tl"></span><span class="md-corner tr"></span>
+      <span class="md-corner bl"></span><span class="md-corner br"></span>
+      <div class="md-scanline"></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,27 @@
+---
+import Icon from './icons/Icon.astro';
+---
+
+<nav class="md-navigation-bar" aria-label="Primary">
+  <button id="scanBtn" class="md-nav-destination" type="button" data-active="true" aria-selected="true">
+    <span class="md-nav-indicator">
+      <Icon name="qr_code_scanner" size={24} />
+    </span>
+    <span class="md-nav-label">Scan</span>
+  </button>
+
+  <label id="uploadBtn" class="md-nav-destination" for="fileInput">
+    <span class="md-nav-indicator">
+      <Icon name="upload" size={24} />
+    </span>
+    <span class="md-nav-label">Upload</span>
+  </label>
+  <input id="fileInput" type="file" accept="image/*" hidden />
+
+  <button id="historyBtn" class="md-nav-destination" type="button" data-active="false" aria-selected="false">
+    <span class="md-nav-indicator">
+      <Icon name="history" size={24} />
+    </span>
+    <span class="md-nav-label">History</span>
+  </button>
+</nav>

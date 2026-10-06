@@ -1,0 +1,26 @@
+---
+import Icon from './icons/Icon.astro';
+---
+
+<section id="historyPanel" class="md-history" hidden aria-label="Recent scans">
+  <div class="md-history-header">
+    <div class="md-history-title">
+      <Icon name="history" size={20} />
+      <h2>Recent scans</h2>
+    </div>
+    <div class="md-history-tools">
+      <button id="clearBtn" class="md-button md-button-text" type="button">
+        <Icon name="delete" size={18} />
+        <span>Clear</span>
+      </button>
+      <button id="historyClose" class="md-icon-button" type="button" aria-label="Close history">
+        <Icon name="close" size={20} />
+      </button>
+    </div>
+  </div>
+  <ul id="historyList" class="md-history-list"></ul>
+  <div id="historyEmpty" class="md-history-empty">
+    <Icon name="image" size={28} />
+    <p>No scans yet. Codes you scan will appear here.</p>
+  </div>
+</section>
